@@ -34,3 +34,19 @@ func EntityFromDTO(dto *userDto.CreateFileDTO) *UserFile {
 		IsDeleted: false,
 	}
 }
+
+func (entity *UserFile) FillEntityFromPatchDTO(dto *userDto.PatchFileDTO) {
+	if dto.Filename != nil {
+		entity.Filename = *dto.Filename
+	}
+	if dto.Public != nil {
+		entity.Public = *dto.Public
+	}
+	if dto.Type != nil {
+		entity.Type = *dto.Type
+	}
+	if dto.ProjectId != nil {
+		entity.ProjectId = dto.ProjectId
+	}
+	return
+}

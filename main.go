@@ -15,6 +15,9 @@ func setupRoutes(mainRouter *chi.Mux) {
 	userFilesRouter := chi.NewRouter()
 	userFilesRouter.Post("/upload", userFiles.CreateFile)
 	userFilesRouter.Get("/download", userFiles.SelectFile)
+	userFilesRouter.Get("/", userFiles.GetUserFilesList)
+	userFilesRouter.Patch("/", userFiles.PatchUserFile)
+	userFilesRouter.Delete("/", userFiles.DeleteUserFile)
 	mainRouter.Route("/", func(r chi.Router) {
 		mainRouter.Mount("/user_files", userFilesRouter)
 	})

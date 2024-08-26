@@ -90,7 +90,8 @@ func (s *UserFilesService) SelectOneFile(
 	statement = statement.Model(entity).
 		Where("filename = ?", filename).
 		Where("ext = ?", ext).
-		Where("type = ?::platformtypeenum", dto.Type)
+		Where("type = ?::platformtypeenum", dto.Type).
+		Where("is_deleted = ?", false)
 	if dto.ProjectId == nil {
 		statement = statement.Where("project_id IS ?", dto.ProjectId)
 	} else {
@@ -111,6 +112,9 @@ func (s *UserFilesService) DownloadOneFile(
 	userFile, err, status := s.SelectOneFile(dto, nil, ctx)
 	if err != nil {
 		return nil, err, status
+	}
+	if userFile.Public == false && userFile.Owner != dto.UserId {
+		return nil, fmt.Errorf("ACCESS_DENIED"), http.StatusForbidden
 	}
 
 	minioClient, err := minio.New(common.Config.Get("FILESERVER_ADDR"), &minio.Options{
@@ -141,6 +145,101 @@ func (s *UserFilesService) DownloadOneFile(
 		return nil, err, http.StatusInternalServerError
 	}
 	return &bytes, nil, http.StatusOK
+}
+
+func (s *UserFilesService) GetUserFilesList(
+	dto *userDto.SelectManyFilesDTO, ctx *context.Context,
+) (*map[string][]string, error, int) {
+	entities := make([]UserFile, 0)
+	statement := database.Service.NewSelect().Model(&entities).
+		Column("filename", "ext", "public").
+		Where("(public = ? or owner = ?)", true, dto.UserId).
+		Where("type = ?::platformtypeenum", dto.Type).
+		Where("is_deleted = ?", false)
+	if dto.ProjectId != nil {
+		statement = statement.Where("project_id = ?", dto.ProjectId)
+	}
+	err := statement.
+		Group("public", "filename", "ext", "updated_at").
+		Order("public DESC", "updated_at DESC").
+		Scan(*ctx)
+	if err != nil {
+		return nil, err, http.StatusNotFound
+	}
+	resultMap := map[string][]string{}
+	for _, v := range entities {
+		if v.Public == true {
+			if _, ok := resultMap["public"]; !ok {
+				resultMap["public"] = make([]string, 0)
+			}
+			resultMap["public"] = append(resultMap["public"], v.Filename+"."+v.Ext)
+		} else {
+			if _, ok := resultMap["private"]; !ok {
+				resultMap["private"] = make([]string, 0)
+			}
+			resultMap["private"] = append(resultMap["private"], v.Filename+"."+v.Ext)
+		}
+	}
+	return &resultMap, nil, http.StatusOK
+}
+
+func (s *UserFilesService) PatchUserFile(
+	dto *userDto.SelectOneFileDTO, entity *userDto.PatchFileDTO, ctx *context.Context,
+) (*UserFile, error, int) {
+	exists := make([]UserFile, 0)
+	statement := database.Service.NewSelect().Model(&exists).
+		Where("is_deleted = ?", false)
+	if entity.Filename != nil {
+		filename, ext := common.PrepareFilename(*entity.Filename)
+		entity.Filename = &filename
+		statement = statement.Where("filename = ?", filename).Where("ext = ?", ext)
+	}
+	if entity.Type != nil {
+		statement = statement.Where("type = ?::platformtypeenum", entity.Type)
+	}
+	err := statement.Scan(*ctx)
+	fmt.Printf("%+v\n", exists)
+	if err != nil {
+		return nil, fmt.Errorf("SOMETHING_IS_WRONG"), http.StatusInternalServerError
+	}
+	if len(exists) != 0 {
+		return nil, fmt.Errorf("NEW_FILE_PRESENT_IN_DATABASE"), http.StatusConflict
+	}
+	exists = nil
+
+	userFile, err, status := s.SelectOneFile(dto, nil, ctx)
+	if err != nil {
+		return nil, err, status
+	}
+	if userFile.Public == false && userFile.Owner != dto.UserId {
+		return nil, fmt.Errorf("ACCESS_DENIED"), http.StatusForbidden
+	}
+
+	userFile.FillEntityFromPatchDTO(entity)
+	_, err = database.Service.NewUpdate().Model(userFile).WherePK().Returning("*").Exec(*ctx)
+	if err != nil {
+		return nil, err, http.StatusInternalServerError
+	}
+	return userFile, nil, http.StatusOK
+}
+
+func (s *UserFilesService) DeleteUserFile(dto *userDto.SelectOneFileDTO, ctx *context.Context) (*UserFile, error, int) {
+	userFile, err, status := s.SelectOneFile(dto, nil, ctx)
+	if err != nil {
+		return nil, err, status
+	}
+	if userFile.Public == false && userFile.Owner != dto.UserId {
+		return nil, fmt.Errorf("ACCESS_DENIED"), http.StatusForbidden
+	}
+	_, err = database.Service.NewUpdate().Model(userFile).
+		Set("is_deleted = ?", true).
+		WherePK().
+		Returning("*").
+		Exec(*ctx)
+	if err != nil {
+		return nil, err, http.StatusInternalServerError
+	}
+	return userFile, nil, http.StatusOK
 }
 
 var Service = &UserFilesService{}

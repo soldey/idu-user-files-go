@@ -4,9 +4,11 @@ import (
 	"errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/joho/godotenv"
 	"log"
 	"main/modules/userFiles"
 	"net/http"
+	"os"
 )
 
 func setupRoutes(mainRouter *chi.Mux) {
@@ -18,6 +20,7 @@ func setupRoutes(mainRouter *chi.Mux) {
 }
 
 func main() {
+	godotenv.Load(".env." + os.Getenv("APP_ENV"))
 	r := chi.NewRouter()
 	r.Use(middleware.AllowContentType("application/json", "multipart/form-data"))
 	r.Use(middleware.Logger)

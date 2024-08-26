@@ -50,7 +50,7 @@ func (s *UserFilesService) CreateFile(dto *userDto.CreateFileDTO, file multipart
 		return nil, err, http.StatusInternalServerError
 	}
 	_ = tx.Commit()
-	minioClient, err := minio.New(os.Getenv("FILESERVER_ADDRESS"), &minio.Options{
+	minioClient, err := minio.New(common.Config.Get("FILESERVER_ADDR"), &minio.Options{
 		Creds: credentials.NewStaticV4(
 			os.Getenv("FILESERVER_ACCESS_KEY"), os.Getenv("FILESERVER_SECRET_KEY"), "",
 		),
@@ -61,7 +61,7 @@ func (s *UserFilesService) CreateFile(dto *userDto.CreateFileDTO, file multipart
 	}
 	_, err = minioClient.PutObject(
 		*ctx,
-		"user-files-"+strings.ToLower(string(userFile.Type)),
+		common.Config.Get("FILESERVER_BUCKET")+"-"+strings.ToLower(string(userFile.Type)),
 		fmt.Sprintf("%s.%s", strconv.FormatInt(userFile.Id, 10), userFile.Ext),
 		file, header.Size,
 		minio.PutObjectOptions{})

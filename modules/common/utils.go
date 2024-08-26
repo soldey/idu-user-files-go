@@ -31,12 +31,13 @@ func GetMediaType(key string) string {
 
 type PlatformType string
 
+//goland:noinspection ALL
 const (
 	DUP PlatformType = "DUP"
 	TRP PlatformType = "TRP"
 )
 
-var mediaTypes map[string]string = map[string]string{
+var mediaTypes = map[string]string{
 	"geojson": "application/geo+json",
 	"json":    "application/json",
 }

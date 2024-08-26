@@ -22,9 +22,21 @@ func ParseParam(param string, isString bool) string {
 	return param
 }
 
+func GetMediaType(key string) string {
+	if v, ok := mediaTypes[key]; ok {
+		return v
+	}
+	return "text/plain"
+}
+
 type PlatformType string
 
 const (
 	DUP PlatformType = "DUP"
 	TRP PlatformType = "TRP"
 )
+
+var mediaTypes map[string]string = map[string]string{
+	"geojson": "application/geo+json",
+	"json":    "application/json",
+}

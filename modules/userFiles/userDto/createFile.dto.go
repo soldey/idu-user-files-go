@@ -16,7 +16,7 @@ type CreateFileDTO struct {
 	ProjectId *int                `json:"project_id"`
 }
 
-func FromRequest(r *http.Request) (*CreateFileDTO, error, int) {
+func (dto *CreateFileDTO) FromRequest(r *http.Request) (error, int) {
 	dtoString := fmt.Sprintf(
 		"{\"filename\": %s, \"public\": %s, \"owner\": %s, \"type\": %s, \"project_id\": %s}",
 		common.ParseParam(r.URL.Query().Get("filename"), true),
@@ -25,10 +25,9 @@ func FromRequest(r *http.Request) (*CreateFileDTO, error, int) {
 		common.ParseParam(r.URL.Query().Get("type"), true),
 		common.ParseParam(r.URL.Query().Get("project_id"), false),
 	)
-	dto := new(CreateFileDTO)
 	err := json.NewDecoder(strings.NewReader(dtoString)).Decode(&dto)
 	if err != nil {
-		return nil, err, http.StatusBadRequest
+		return err, http.StatusBadRequest
 	}
-	return dto, nil, http.StatusOK
+	return nil, http.StatusOK
 }

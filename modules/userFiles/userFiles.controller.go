@@ -2,12 +2,14 @@ package userFiles
 
 import (
 	"encoding/json"
+	"main/modules/common"
 	"main/modules/userFiles/userDto"
 	"net/http"
 )
 
 func CreateFile(w http.ResponseWriter, r *http.Request) {
-	dto, err, status := userDto.FromRequest(r)
+	dto := new(userDto.CreateFileDTO)
+	err, status := dto.FromRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), status)
 		return
@@ -29,4 +31,24 @@ func CreateFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(entity)
+}
+
+func SelectFile(w http.ResponseWriter, r *http.Request) {
+	dto := new(userDto.SelectOneFileDTO)
+	err, status := dto.FromRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), status)
+		return
+	}
+
+	ctx := r.Context()
+	bytes, err, status := Service.DownloadOneFile(dto, &ctx)
+	if err != nil {
+		http.Error(w, err.Error(), status)
+		return
+	}
+	_, ext := common.PrepareFilename(dto.Filename)
+	w.Header().Set("Content-Type", common.GetMediaType(ext))
+	w.WriteHeader(status)
+	w.Write(*bytes)
 }

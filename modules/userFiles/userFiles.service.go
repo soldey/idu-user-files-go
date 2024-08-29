@@ -14,6 +14,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -62,20 +64,17 @@ func (s *UserFilesService) CreateFile(
 		_ = tx.Rollback()
 		return nil, err, http.StatusInternalServerError
 	}
-	_, err = minioClient.PutObject(
-		*ctx,
+	backgroundCtx := context.Background()
+	go minioClient.PutObject(
+		backgroundCtx,
 		common.Config.Get("FILESERVER_BUCKET")+"-"+strings.ToLower(string(userFile.Type)),
 		fmt.Sprintf("%s.%s", strconv.FormatInt(userFile.Id, 10), userFile.Ext),
 		file, header.Size,
-		minio.PutObjectOptions{})
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err, http.StatusInternalServerError
-	}
+		minio.PutObjectOptions{NumThreads: uint(runtime.NumCPU()) * 2})
 	bytes := make([]byte, header.Size)
 	_, err = file.Read(bytes)
 	if err == nil {
-		database.Redis.SaveBytes(ctx, fmt.Sprintf("user_files:%d.%s", userFile.Id, userFile.Ext), bytes, 300)
+		go database.Redis.SaveBytes(&backgroundCtx, fmt.Sprintf("user_files:%d.%s", userFile.Id, userFile.Ext), bytes, 300)
 	} else {
 		fmt.Println(err.Error())
 	}
@@ -123,6 +122,19 @@ func (s *UserFilesService) DownloadOneFile(
 	if userFile.Public == false && userFile.Owner != dto.UserId {
 		return nil, fmt.Errorf("ACCESS_DENIED"), http.StatusForbidden
 	}
+	key := fmt.Sprintf("user_files:%d.%s", userFile.Id, userFile.Ext)
+	redisKeys := database.Redis.GetStringList(ctx)
+	fmt.Printf("%s %+v\n", key, redisKeys)
+	if slices.Contains(
+		database.Redis.GetStringList(ctx), key,
+	) {
+		bytes, err := database.Redis.GetBytes(ctx, key)
+		if err != nil {
+			return nil, err, http.StatusInternalServerError
+		}
+		database.Redis.SetTTL(ctx, key, 300)
+		return &bytes, nil, http.StatusOK
+	}
 
 	minioClient, err := minio.New(common.Config.Get("FILESERVER_ADDR"), &minio.Options{
 		Creds: credentials.NewStaticV4(
@@ -151,6 +163,7 @@ func (s *UserFilesService) DownloadOneFile(
 	if err != nil && err != io.EOF {
 		return nil, err, http.StatusInternalServerError
 	}
+	database.Redis.SaveBytes(ctx, fmt.Sprintf("user_files:%d.%s", userFile.Id, userFile.Ext), bytes, 300)
 	return &bytes, nil, http.StatusOK
 }
 

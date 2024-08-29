@@ -11,9 +11,9 @@ import (
 	"main/modules/common"
 )
 
-var Service *bun.DB
+var Database *bun.DB
 
-type Database struct {
+type DatabaseConfig struct {
 	host     string
 	port     string
 	user     string
@@ -21,16 +21,16 @@ type Database struct {
 	dbName   string
 }
 
-func NewDatabase(host string, port string, user string, password string, dbName string) Database {
-	database := Database{
+func NewDatabase(host string, port string, user string, password string, dbName string) DatabaseConfig {
+	database := DatabaseConfig{
 		host: host, port: port, user: user, password: password, dbName: dbName,
 	}
 	database.Connect()
 	return database
 }
 
-func (d *Database) Connect() error {
-	if Service == nil {
+func (d *DatabaseConfig) Connect() error {
+	if Database == nil {
 		sqldb := sql.OpenDB(
 			pgdriver.NewConnector(
 				pgdriver.WithNetwork("tcp"),
@@ -42,9 +42,9 @@ func (d *Database) Connect() error {
 				pgdriver.WithInsecure(true),
 			),
 		)
-		Service = bun.NewDB(sqldb, pgdialect.New())
-		Service.AddQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(true)))
-		if _, err := Service.ExecContext(context.Background(), "select 1"); err == nil {
+		Database = bun.NewDB(sqldb, pgdialect.New())
+		Database.AddQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(true)))
+		if _, err := Database.ExecContext(context.Background(), "select 1"); err == nil {
 			fmt.Println("ready")
 		} else {
 			return err
@@ -53,14 +53,14 @@ func (d *Database) Connect() error {
 	return nil
 }
 
-func (d *Database) dispose() error {
-	if Service != nil {
-		err := Service.Close()
+func (d *DatabaseConfig) dispose() error {
+	if Database != nil {
+		err := Database.Close()
 		if err != nil {
 			fmt.Printf("error %s", err)
 			return err
 		}
-		Service = nil
+		Database = nil
 	}
 	return nil
 }

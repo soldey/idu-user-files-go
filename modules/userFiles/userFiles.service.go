@@ -32,7 +32,7 @@ func (s *UserFilesService) CreateFile(
 ) (*UserFile, error, int) {
 	database.DbConfig.Connect()
 
-	tx, err := database.Service.BeginTx(*ctx, &sql.TxOptions{})
+	tx, err := database.Database.BeginTx(*ctx, &sql.TxOptions{})
 	if err != nil {
 		return nil, err, http.StatusInternalServerError
 	}
@@ -72,6 +72,13 @@ func (s *UserFilesService) CreateFile(
 		_ = tx.Rollback()
 		return nil, err, http.StatusInternalServerError
 	}
+	bytes := make([]byte, header.Size)
+	_, err = file.Read(bytes)
+	if err == nil {
+		database.Redis.SaveBytes(ctx, fmt.Sprintf("user_files:%d.%s", userFile.Id, userFile.Ext), bytes, 300)
+	} else {
+		fmt.Println(err.Error())
+	}
 	_ = tx.Commit()
 	return userFile, nil, http.StatusOK
 }
@@ -85,7 +92,7 @@ func (s *UserFilesService) SelectOneFile(
 	if tx != nil {
 		statement = tx.NewSelect()
 	} else {
-		statement = database.Service.NewSelect()
+		statement = database.Database.NewSelect()
 	}
 	statement = statement.Model(entity).
 		Where("filename = ?", filename).
@@ -151,7 +158,7 @@ func (s *UserFilesService) GetUserFilesList(
 	dto *userDto.SelectManyFilesDTO, ctx *context.Context,
 ) (*map[string][]string, error, int) {
 	entities := make([]UserFile, 0)
-	statement := database.Service.NewSelect().Model(&entities).
+	statement := database.Database.NewSelect().Model(&entities).
 		Column("filename", "ext", "public").
 		Where("(public = ? or owner = ?)", true, dto.UserId).
 		Where("type = ?::platformtypeenum", dto.Type).
@@ -187,7 +194,7 @@ func (s *UserFilesService) PatchUserFile(
 	dto *userDto.SelectOneFileDTO, entity *userDto.PatchFileDTO, ctx *context.Context,
 ) (*UserFile, error, int) {
 	exists := make([]UserFile, 0)
-	statement := database.Service.NewSelect().Model(&exists).
+	statement := database.Database.NewSelect().Model(&exists).
 		Where("is_deleted = ?", false)
 	if entity.Filename != nil {
 		filename, ext := common.PrepareFilename(*entity.Filename)
@@ -216,7 +223,7 @@ func (s *UserFilesService) PatchUserFile(
 	}
 
 	userFile.FillEntityFromPatchDTO(entity)
-	_, err = database.Service.NewUpdate().Model(userFile).WherePK().Returning("*").Exec(*ctx)
+	_, err = database.Database.NewUpdate().Model(userFile).WherePK().Returning("*").Exec(*ctx)
 	if err != nil {
 		return nil, err, http.StatusInternalServerError
 	}
@@ -231,7 +238,7 @@ func (s *UserFilesService) DeleteUserFile(dto *userDto.SelectOneFileDTO, ctx *co
 	if userFile.Public == false && userFile.Owner != dto.UserId {
 		return nil, fmt.Errorf("ACCESS_DENIED"), http.StatusForbidden
 	}
-	_, err = database.Service.NewUpdate().Model(userFile).
+	_, err = database.Database.NewUpdate().Model(userFile).
 		Set("is_deleted = ?", true).
 		WherePK().
 		Returning("*").

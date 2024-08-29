@@ -47,6 +47,7 @@ func SelectFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), status)
 		return
 	}
+
 	_, ext := common.PrepareFilename(dto.Filename)
 	w.Header().Set("Content-Type", common.GetMediaType(ext))
 	w.WriteHeader(status)

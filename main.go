@@ -68,7 +68,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 	setupRoutes(r)
 
-	httpServer := &http.Server{Addr: "localhost:8000", Handler: r}
+	httpServer := &http.Server{Addr: "localhost:7001", Handler: r}
 	err := httpServer.ListenAndServe()
 	if !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf(err.Error())

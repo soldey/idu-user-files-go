@@ -30,4 +30,6 @@ WORKDIR /app
 COPY ./.env.${APP_ENV} .
 COPY --from=builder /app/main /app/main
 
+EXPOSE 7001
+
 CMD ["./main"]

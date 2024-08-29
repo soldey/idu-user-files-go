@@ -1,0 +1,8 @@
+services:
+  go_backend:
+    container_name: go_backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "7001:7001"

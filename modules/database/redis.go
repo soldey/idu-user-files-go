@@ -43,4 +43,4 @@ func (s *RedisService) GetBytes(ctx *context.Context, key string) ([]byte, error
 	return s.Redis.Get(*ctx, key).Bytes()
 }
 
-var Redis = NewRedisService()
+var Redis RedisService

@@ -2,14 +2,51 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 	"log"
+	"main/modules/common"
+	"main/modules/database"
 	"main/modules/userFiles"
 	"net/http"
 	"os"
+	"time"
 )
+
+func initConfig(c chan<- string) {
+	godotenv.Load(".env." + os.Getenv("APP_ENV"))
+	common.Config = common.NewConfig()
+	c <- "config"
+	fmt.Println("Config initialized")
+}
+
+func initAfter(c <-chan string) {
+	for {
+		msg := <-c
+		if msg == "config" {
+			database.DbConfig = database.NewDatabase(
+				common.Config.Get("DB_HOST"),
+				common.Config.Get("DB_PORT"),
+				common.Config.Get("DB_USER"),
+				common.Config.Get("DB_PASSWORD"),
+				common.Config.Get("DB_DATABASE"),
+			)
+			database.Redis = database.NewRedisService()
+			userFiles.Service = &userFiles.UserFilesService{}
+			break
+		}
+		time.Sleep(time.Second * 1)
+	}
+	fmt.Println("Init completed")
+}
+
+func initDependencies() {
+	c := make(chan string)
+	go initConfig(c)
+	go initAfter(c)
+}
 
 func setupRoutes(mainRouter *chi.Mux) {
 	userFilesRouter := chi.NewRouter()
@@ -24,7 +61,7 @@ func setupRoutes(mainRouter *chi.Mux) {
 }
 
 func main() {
-	godotenv.Load(".env." + os.Getenv("APP_ENV"))
+	initDependencies()
 	r := chi.NewRouter()
 	r.Use(middleware.AllowContentType("application/json", "multipart/form-data"))
 	r.Use(middleware.Logger)

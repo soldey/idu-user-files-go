@@ -8,7 +8,6 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/extra/bundebug"
-	"main/modules/common"
 )
 
 var Database *bun.DB
@@ -65,10 +64,12 @@ func (d *DatabaseConfig) dispose() error {
 	return nil
 }
 
-var DbConfig = NewDatabase(
-	common.Config.Get("DB_HOST"),
-	common.Config.Get("DB_PORT"),
-	common.Config.Get("DB_USER"),
-	common.Config.Get("DB_PASSWORD"),
-	common.Config.Get("DB_DATABASE"),
-)
+var DbConfig DatabaseConfig
+
+//var DbConfig = NewDatabase(
+//	common.Config.Get("DB_HOST"),
+//	common.Config.Get("DB_PORT"),
+//	common.Config.Get("DB_USER"),
+//	common.Config.Get("DB_PASSWORD"),
+//	common.Config.Get("DB_DATABASE"),
+//)

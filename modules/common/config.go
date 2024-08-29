@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"github.com/joho/godotenv"
 	"log"
 	"os"
@@ -8,13 +9,14 @@ import (
 
 type config struct{}
 
-func newConfig() config {
+func NewConfig() config {
 	c := config{}
 	c.Load()
 	return c
 }
 
 func (c *config) Load() {
+	fmt.Printf("Starting with %s\n", os.Getenv("APP_ENV"))
 	godotenv.Load(".env." + os.Getenv("APP_ENV"))
 }
 
@@ -26,4 +28,4 @@ func (c *config) Get(key string) string {
 	return ""
 }
 
-var Config = newConfig()
+var Config config

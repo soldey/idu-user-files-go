@@ -262,4 +262,4 @@ func (s *UserFilesService) DeleteUserFile(dto *userDto.SelectOneFileDTO, ctx *co
 	return userFile, nil, http.StatusOK
 }
 
-var Service = &UserFilesService{}
+var Service *UserFilesService

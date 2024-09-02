@@ -23,6 +23,8 @@ func NewRedisService() RedisService {
 		Password: "",
 		DB:       0,
 	})}
+	ctx := context.Background()
+	fmt.Printf("Redis: %+v\n", redisService.GetStringList(&ctx))
 	return redisService
 }
 

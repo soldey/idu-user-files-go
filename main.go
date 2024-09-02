@@ -6,7 +6,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
-	"log"
 	"main/modules/common"
 	"main/modules/database"
 	"main/modules/userFiles"
@@ -68,9 +67,8 @@ func main() {
 	r.Use(middleware.Recoverer)
 	setupRoutes(r)
 
-	httpServer := &http.Server{Addr: "localhost:7001", Handler: r}
-	err := httpServer.ListenAndServe()
+	err := http.ListenAndServe(":8000", r)
 	if !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf(err.Error())
+		fmt.Println(err.Error())
 	}
 }

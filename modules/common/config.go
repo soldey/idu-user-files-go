@@ -22,6 +22,7 @@ func (c *config) Load() {
 
 func (c *config) Get(key string) string {
 	if res, ok := os.LookupEnv(key); ok {
+		fmt.Printf("Used env: %s, val: %s\n", key, res)
 		return res
 	}
 	log.Fatalf("%s - no such key in ENV", key)

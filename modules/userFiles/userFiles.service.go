@@ -23,6 +23,10 @@ import (
 type IUserFilesService interface {
 	CreateFile(dto *userDto.CreateFileDTO, file multipart.File, header *multipart.FileHeader, ctx *context.Context) (*UserFile, error, int)
 	SelectOneFile(dto userDto.SelectOneFileDTO, tx *bun.Tx, ctx *context.Context) (*UserFile, error, int)
+	DownloadOneFile(dto *userDto.SelectOneFileDTO, ctx *context.Context) (*[]byte, error, int)
+	GetUserFilesList(dto *userDto.SelectManyFilesDTO, ctx *context.Context) (*map[string][]string, error, int)
+	PatchUserFile(dto *userDto.SelectOneFileDTO, entity *userDto.PatchFileDTO, ctx *context.Context) (*UserFile, error, int)
+	DeleteUserFile(dto *userDto.SelectOneFileDTO, ctx *context.Context) (*UserFile, error, int)
 }
 
 type UserFilesService struct {
@@ -32,7 +36,6 @@ type UserFilesService struct {
 func (s *UserFilesService) CreateFile(
 	dto *userDto.CreateFileDTO, file multipart.File, header *multipart.FileHeader, ctx *context.Context,
 ) (*UserFile, error, int) {
-	database.DbConfig.Connect()
 
 	tx, err := database.Database.BeginTx(*ctx, &sql.TxOptions{})
 	if err != nil {
@@ -97,7 +100,8 @@ func (s *UserFilesService) SelectOneFile(
 		Where("filename = ?", filename).
 		Where("ext = ?", ext).
 		Where("type = ?::platformtypeenum", dto.Type).
-		Where("is_deleted = ?", false)
+		Where("is_deleted = ?", false).
+		Where("public = ? or owner = ?", true, dto.UserId)
 	if dto.ProjectId == nil {
 		statement = statement.Where("project_id IS ?", dto.ProjectId)
 	} else {
@@ -106,6 +110,35 @@ func (s *UserFilesService) SelectOneFile(
 	err := statement.
 		Limit(1).
 		Scan(*ctx)
+	if err != nil {
+		return nil, fmt.Errorf("FILE_NOT_FOUND"), http.StatusNotFound
+	}
+	return entity, nil, http.StatusOK
+}
+
+func (s *UserFilesService) SelectOneFileForUpdate(
+	dto *userDto.SelectOneFileDTO, tx *bun.Tx, ctx *context.Context,
+) (*UserFile, error, int) {
+	filename, ext := common.PrepareFilename(dto.Filename)
+	entity := new(UserFile)
+	var statement *bun.SelectQuery
+	if tx != nil {
+		statement = tx.NewSelect()
+	} else {
+		statement = database.Database.NewSelect()
+	}
+	statement = statement.Model(entity).
+		Where("filename = ?", filename).
+		Where("ext = ?", ext).
+		Where("type = ?::platformtypeenum", dto.Type).
+		Where("owner = ?", dto.UserId).
+		Where("is_deleted = ?", false)
+	if dto.ProjectId == nil {
+		statement = statement.Where("project_id IS ?", dto.ProjectId)
+	} else {
+		statement = statement.Where("project_id = ?", *dto.ProjectId)
+	}
+	err := statement.Limit(1).Scan(*ctx)
 	if err != nil {
 		return nil, fmt.Errorf("FILE_NOT_FOUND"), http.StatusNotFound
 	}
@@ -206,19 +239,42 @@ func (s *UserFilesService) GetUserFilesList(
 func (s *UserFilesService) PatchUserFile(
 	dto *userDto.SelectOneFileDTO, entity *userDto.PatchFileDTO, ctx *context.Context,
 ) (*UserFile, error, int) {
+	found, err, status := s.SelectOneFileForUpdate(dto, nil, ctx)
+	if err != nil {
+		return nil, err, status
+	}
 	exists := make([]UserFile, 0)
 	statement := database.Database.NewSelect().Model(&exists).
 		Where("is_deleted = ?", false)
 	if entity.Filename != nil {
 		filename, ext := common.PrepareFilename(*entity.Filename)
-		entity.Filename = &filename
-		statement = statement.Where("filename = ?", filename).Where("ext = ?", ext)
+		found.Filename = filename
+		found.Ext = ext
 	}
 	if entity.Type != nil {
-		statement = statement.Where("type = ?::platformtypeenum", entity.Type)
+		found.Type = *entity.Type
 	}
-	err := statement.Scan(*ctx)
-	fmt.Printf("%+v\n", exists)
+	if entity.Public != nil {
+		found.Public = *entity.Public
+	}
+	if entity.ProjectId != nil && *entity.ProjectId != -1 {
+		found.ProjectId = entity.ProjectId
+	}
+	statement = statement.
+		Where("filename = ?", found.Filename).
+		Where("ext = ?", found.Ext).
+		Where("type = ?::platformtypeenum", found.Type)
+	if found.Public {
+		statement = statement.Where("public = ?", found.Public)
+	} else {
+		statement = statement.Where("owner = ?", found.Owner).Where("public = ?", found.Public)
+	}
+	if found.ProjectId == nil {
+		statement = statement.Where("project_id IS ?", found.ProjectId)
+	} else {
+		statement = statement.Where("project_id = ?", *found.ProjectId)
+	}
+	err = statement.Scan(*ctx)
 	if err != nil {
 		return nil, fmt.Errorf("SOMETHING_IS_WRONG"), http.StatusInternalServerError
 	}
@@ -226,30 +282,17 @@ func (s *UserFilesService) PatchUserFile(
 		return nil, fmt.Errorf("NEW_FILE_PRESENT_IN_DATABASE"), http.StatusConflict
 	}
 	exists = nil
-
-	userFile, err, status := s.SelectOneFile(dto, nil, ctx)
-	if err != nil {
-		return nil, err, status
-	}
-	if userFile.Public == false && userFile.Owner != dto.UserId {
-		return nil, fmt.Errorf("ACCESS_DENIED"), http.StatusForbidden
-	}
-
-	userFile.FillEntityFromPatchDTO(entity)
-	_, err = database.Database.NewUpdate().Model(userFile).WherePK().Returning("*").Exec(*ctx)
+	_, err = database.Database.NewUpdate().Model(found).WherePK().Returning("*").Exec(*ctx)
 	if err != nil {
 		return nil, err, http.StatusInternalServerError
 	}
-	return userFile, nil, http.StatusOK
+	return found, nil, http.StatusOK
 }
 
 func (s *UserFilesService) DeleteUserFile(dto *userDto.SelectOneFileDTO, ctx *context.Context) (*UserFile, error, int) {
-	userFile, err, status := s.SelectOneFile(dto, nil, ctx)
+	userFile, err, status := s.SelectOneFileForUpdate(dto, nil, ctx)
 	if err != nil {
 		return nil, err, status
-	}
-	if userFile.Public == false && userFile.Owner != dto.UserId {
-		return nil, fmt.Errorf("ACCESS_DENIED"), http.StatusForbidden
 	}
 	_, err = database.Database.NewUpdate().Model(userFile).
 		Set("is_deleted = ?", true).

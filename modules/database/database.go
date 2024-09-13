@@ -46,7 +46,7 @@ func (d *DatabaseConfig) Connect() error {
 		if _, err := Database.ExecContext(context.Background(), "select 1"); err == nil {
 			fmt.Println("ready")
 		} else {
-			return err
+			panic(err)
 		}
 	}
 	return nil

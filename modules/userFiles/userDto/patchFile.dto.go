@@ -14,6 +14,8 @@ type PatchFileDTO struct {
 }
 
 func (dto *PatchFileDTO) FromRequest(r *http.Request) (error, int) {
+	defaultProjectId := -1
+	dto.ProjectId = &defaultProjectId
 	err := json.NewDecoder(r.Body).Decode(&dto)
 	if err != nil {
 		return err, http.StatusBadRequest
